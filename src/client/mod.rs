@@ -24,12 +24,13 @@ use tracing::{trace, warn};
 pub struct Config {
     ctx: SslContext,
     session_cache: Arc<dyn SessionCache>,
+    pub ssl_init_hook: Option<Box<dyn Fn(&mut Ssl) + Send + Sync>>,
+    pub transport_params_hook: Option<Box<dyn Fn(&mut Vec<u8>) + Send + Sync>>,
 }
 
 impl Config {
     pub fn new() -> Result<Self> {
         let mut builder = SslContextBuilder::new(SslMethod::tls())?;
-
         // QUIC requires TLS 1.3.
         builder.set_min_proto_version(Some(SslVersion::TLS1_3))?;
         builder.set_max_proto_version(Some(SslVersion::TLS1_3))?;
@@ -61,6 +62,8 @@ impl Config {
         Ok(Self {
             ctx,
             session_cache: Arc::new(SimpleCache::new(256)),
+            ssl_init_hook: None,
+            transport_params_hook: None,
         })
     }
 
@@ -144,6 +147,10 @@ impl Session {
         let session_cache = cfg.session_cache.clone();
         let mut ssl = Ssl::new(&cfg.ctx).unwrap();
 
+        if let Some(hook) = &cfg.ssl_init_hook {
+            hook(&mut ssl);
+        }
+
         // Configure the TLS extension based on the QUIC version used.
         ssl.set_quic_use_legacy_codepoint(version.uses_legacy_extension());
 
@@ -159,8 +166,13 @@ impl Session {
         ssl.set_hostname(server_name)
             .map_err(|_| ConnectError::InvalidServerName(server_name.into()))?;
 
+        let mut encoded_params = encode_params(params).to_vec();
+        if let Some(hook) = &cfg.transport_params_hook {
+            hook(&mut encoded_params);
+        }
+
         // Set the transport parameters.
-        ssl.set_quic_transport_params(&encode_params(params))
+        ssl.set_quic_transport_params(&encoded_params)
             .map_err(|_| ConnectError::EndpointStopping)?;
 
         let server_name_bytes = Bytes::copy_from_slice(server_name.as_bytes());
