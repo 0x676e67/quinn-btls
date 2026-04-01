@@ -27,17 +27,29 @@ pub struct Config {
 }
 
 impl Config {
+    /// Creates a new [Config] using a default [SslContextBuilder].
     pub fn new() -> Result<Self> {
         let mut builder = SslContextBuilder::new(SslMethod::tls())?;
+        builder.set_default_verify_paths()?;
+        Self::from_builder(builder)
+    }
 
-        // QUIC requires TLS 1.3.
+    /// Creates a new [Config] from a caller-provided [SslContextBuilder].
+    ///
+    /// The builder is the right place to configure settings that are only available on
+    /// [SslContextBuilder] and not on the finished [SslContext], such as:
+    /// - [`SslContextBuilder::set_grease_enabled`]
+    /// - [`SslContextBuilder::set_sigalgs_list`]
+    /// - [`SslContextBuilder::set_extension_permutation`]
+    /// - [`SslContextBuilder::add_certificate_compression_algorithm`]
+    ///
+    /// Quinn-btls will apply its required QUIC callbacks and defaults on top of whatever
+    /// the caller has already configured.
+    pub fn from_builder(mut builder: SslContextBuilder) -> Result<Self> {
+        // QUIC requires TLS 1.3. Enforce this regardless of what the caller configured.
         builder.set_min_proto_version(Some(SslVersion::TLS1_3))?;
         builder.set_max_proto_version(Some(SslVersion::TLS1_3))?;
 
-        builder.set_default_verify_paths()?;
-
-        // We build the context early, since we are not allowed to further mutate the context
-        // in start_session.
         let mut ctx = builder.build();
 
         // By default, enable early data (used for 0-RTT).
