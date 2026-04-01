@@ -20,10 +20,26 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use tracing::{trace, warn};
 
+/// Per-session settings that are applied to each new [Ssl] instance at handshake time.
+///
+/// These settings cannot be baked into the shared [SslContext] because they are either
+/// per-connection by nature (ECH GREASE) or use a per-`SSL` API (ALPS).
+#[derive(Clone, Default)]
+pub struct SessionSettings {
+    /// ALPS protocol payloads to advertise via `SSL_add_application_settings`.
+    /// Each entry is the raw protocol bytes (e.g. `b"h3"`).
+    pub alps_protocols: Vec<Vec<u8>>,
+    /// Whether to use the new ALPS codepoint (17613) instead of the old one (17513).
+    pub alps_use_new_codepoint: bool,
+    /// Whether to enable ECH GREASE on every outgoing ClientHello.
+    pub enable_ech_grease: bool,
+}
+
 /// Configuration for a client-side QUIC. Wraps around a BoringSSL [SslContext].
 pub struct Config {
     ctx: SslContext,
     session_cache: Arc<dyn SessionCache>,
+    session_settings: SessionSettings,
 }
 
 impl Config {
@@ -73,6 +89,7 @@ impl Config {
         Ok(Self {
             ctx,
             session_cache: Arc::new(SimpleCache::new(256)),
+            session_settings: SessionSettings::default(),
         })
     }
 
@@ -89,6 +106,16 @@ impl Config {
     /// as well as info and key logging.
     pub fn ctx_mut(&mut self) -> &mut SslContext {
         &mut self.ctx
+    }
+
+    /// Returns the [SessionSettings] applied to each new TLS session.
+    pub fn session_settings(&self) -> &SessionSettings {
+        &self.session_settings
+    }
+
+    /// Returns the [SessionSettings] applied to each new TLS session, mutably.
+    pub fn session_settings_mut(&mut self) -> &mut SessionSettings {
+        &mut self.session_settings
     }
 
     /// Sets whether or not the peer certificate should be verified. If `true`, any error
@@ -174,6 +201,19 @@ impl Session {
         // Set the transport parameters.
         ssl.set_quic_transport_params(&encode_params(params))
             .map_err(|_| ConnectError::EndpointStopping)?;
+
+        // Apply per-session settings.
+        let settings = &cfg.session_settings;
+        if settings.enable_ech_grease {
+            ssl.set_enable_ech_grease(true);
+        }
+        for proto in &settings.alps_protocols {
+            ssl.add_application_settings(proto)
+                .map_err(|_| ConnectError::EndpointStopping)?;
+        }
+        if !settings.alps_protocols.is_empty() {
+            ssl.set_alps_use_new_codepoint(settings.alps_use_new_codepoint);
+        }
 
         let server_name_bytes = Bytes::copy_from_slice(server_name.as_bytes());
 
