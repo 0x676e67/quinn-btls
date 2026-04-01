@@ -74,10 +74,6 @@ impl From<Alert> for TransportErrorCode {
 
 impl From<Alert> for TransportError {
     fn from(alert: Alert) -> Self {
-        TransportError {
-            code: alert.into(),
-            frame: None,
-            reason: alert.get_description().to_string(),
-        }
+        TransportError::new(alert.into(), alert.get_description().to_string())
     }
 }

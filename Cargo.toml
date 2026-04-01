@@ -30,8 +30,8 @@ btls-sys = "0.5.5"
 bytes = "1"
 foreign-types-shared = "0.3"
 lru = "0.16"
-quinn = { version = "0.11.9", default-features = false }
-quinn-proto = { version = "0.11.13", default-features = false }
+quinn = { git = "https://github.com/0x676e67/quinn", default-features = false }
+quinn-proto = { git = "https://github.com/0x676e67/quinn", package = "quinn-proto", default-features = false }
 rand = "0.10.0"
 tracing = "0.1"
 
@@ -54,8 +54,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
 ] }
 url = "2"
-h3 = "0.0.8"
-h3-quinn = "0.0.10"
+h3 = { path = "../h3/h3" }
+h3-quinn = { path = "../h3/h3-quinn" }
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.3"

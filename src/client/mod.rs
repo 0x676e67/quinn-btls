@@ -357,8 +357,8 @@ impl Session {
 }
 
 impl crypto::Session for Session {
-    fn initial_keys(&self, dcid: &ConnectionId, side: Side) -> crypto::Keys {
-        self.state.initial_keys(dcid, side)
+    fn initial_keys(&self, dcid: ConnectionId, side: Side) -> crypto::Keys {
+        self.state.initial_keys(&dcid, side)
     }
 
     fn handshake_data(&self) -> Option<Box<dyn Any>> {
@@ -410,7 +410,7 @@ impl crypto::Session for Session {
             Some(params) => Ok(Some(params)),
             None => {
                 if self.state.ssl.in_early_data() {
-                    Ok(self.zero_rtt_peer_params)
+                    Ok(self.zero_rtt_peer_params.clone())
                 } else {
                     Ok(None)
                 }
@@ -426,8 +426,8 @@ impl crypto::Session for Session {
         self.state.next_1rtt_keys()
     }
 
-    fn is_valid_retry(&self, orig_dst_cid: &ConnectionId, header: &[u8], payload: &[u8]) -> bool {
-        self.state.is_valid_retry(orig_dst_cid, header, payload)
+    fn is_valid_retry(&self, orig_dst_cid: ConnectionId, header: &[u8], payload: &[u8]) -> bool {
+        self.state.is_valid_retry(&orig_dst_cid, header, payload)
     }
 
     fn export_keying_material(

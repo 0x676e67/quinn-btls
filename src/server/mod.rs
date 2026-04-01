@@ -100,16 +100,16 @@ impl crypto::ServerConfig for Config {
     fn initial_keys(
         &self,
         version: u32,
-        dst_cid: &ConnectionId,
+        dst_cid: ConnectionId,
     ) -> StdResult<crypto::Keys, crypto::UnsupportedVersion> {
         let version = QuicVersion::parse(version)?;
-        let secrets = Secrets::initial(version, dst_cid, Side::Server).unwrap();
+        let secrets = Secrets::initial(version, &dst_cid, Side::Server).unwrap();
         Ok(secrets.keys().unwrap().as_crypto().unwrap())
     }
 
-    fn retry_tag(&self, version: u32, orig_dst_cid: &ConnectionId, packet: &[u8]) -> [u8; 16] {
+    fn retry_tag(&self, version: u32, orig_dst_cid: ConnectionId, packet: &[u8]) -> [u8; 16] {
         let version = QuicVersion::parse(version).unwrap();
-        retry::retry_tag(&version, orig_dst_cid, packet)
+        retry::retry_tag(&version, &orig_dst_cid, packet)
     }
 
     fn start_session(
@@ -244,8 +244,8 @@ impl Session {
 }
 
 impl crypto::Session for Session {
-    fn initial_keys(&self, dcid: &ConnectionId, side: Side) -> crypto::Keys {
-        self.state.initial_keys(dcid, side)
+    fn initial_keys(&self, dcid: ConnectionId, side: Side) -> crypto::Keys {
+        self.state.initial_keys(&dcid, side)
     }
 
     fn handshake_data(&self) -> Option<Box<dyn Any>> {
@@ -292,8 +292,8 @@ impl crypto::Session for Session {
         self.state.next_1rtt_keys()
     }
 
-    fn is_valid_retry(&self, orig_dst_cid: &ConnectionId, header: &[u8], payload: &[u8]) -> bool {
-        self.state.is_valid_retry(orig_dst_cid, header, payload)
+    fn is_valid_retry(&self, orig_dst_cid: ConnectionId, header: &[u8], payload: &[u8]) -> bool {
+        self.state.is_valid_retry(&orig_dst_cid, header, payload)
     }
 
     fn export_keying_material(

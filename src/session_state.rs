@@ -136,11 +136,10 @@ impl SessionState {
         match self.ssl.get_peer_quic_transport_params() {
             Some(params) => {
                 let params = TransportParameters::read(self.side, &mut Cursor::new(params))
-                    .map_err(|e| TransportError {
-                        code: Alert::handshake_failure().into(),
-                        frame: None,
-                        reason: format!("failed parsing transport params: {e:?}"),
-                    })?;
+                    .map_err(|e| TransportError::new(
+                        Alert::handshake_failure().into(),
+                        format!("failed parsing transport params: {e:?}"),
+                    ))?;
                 Ok(Some(params))
             }
             None => Ok(None),
@@ -331,9 +330,10 @@ impl SessionState {
                     format!("{ssl_err}")
                 };
 
-                let mut err: TransportError = Alert::handshake_failure().into();
-                err.reason = reason;
-                Err(err)
+                Err(TransportError::new(
+                    Alert::handshake_failure().into(),
+                    reason,
+                ))
             }
         }
     }
