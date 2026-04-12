@@ -335,9 +335,17 @@ impl SessionState {
 
                 let mut err: TransportError = Alert::handshake_failure().into();
                 err.reason = reason;
-                Err(err)
+                Err(self.inject_ech_retry_configs(err))
             }
         }
+    }
+
+    fn inject_ech_retry_configs(&self, mut err: TransportError) -> TransportError {
+        if let Some(configs) = self.ssl.get_ech_retry_configs() {
+            let hex_configs = hex::encode(configs);
+            err.reason = format!("{} [ECH_RETRY:{}]", err.reason, hex_configs);
+        }
+        err
     }
 }
 
@@ -417,7 +425,8 @@ impl SessionState {
     /// Callback from BoringSSL that sends a fatal alert at the specified encryption level.
     #[inline]
     fn on_send_alert(&mut self, _: Level, alert: Alert) -> Result<()> {
-        self.alert = Some(alert.into());
+        let err: TransportError = alert.into();
+        self.alert = Some(self.inject_ech_retry_configs(err));
         Ok(())
     }
 
